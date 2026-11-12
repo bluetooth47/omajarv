@@ -31,17 +31,35 @@ Remaining trust boundaries:
 
 Phone sudo authorization uses a per-turn Unix socket in a mode-0700 directory,
 with a mode-0600 socket and random capability. Requests exist only during an active
-HTTPS-backed chat. Each askpass invocation creates an RSA-3072 key pair in memory;
-the phone uses RSA-OAEP/SHA-256 to encrypt the password, and the bridge relays only
-ciphertext. The private key and decrypted password stay in the askpass process,
-whose stdout is sudo's password pipe. The API rejects plaintext password fields,
-requires authentication and JSON submissions, and does not log request bodies.
-Replies are one-use; cancellation, expiry, Stop and turn completion remove pending
-requests. No password cache or sudoers bypass is added. Password buffers are
-cleared after use, although JavaScript cannot guarantee erasure of all memory
-copies or protection from same-user inspection. A hostile full-access local agent
-can modify helpers or impersonate a request; this is not a separate OS security
-principal. HTTPS intermediaries remain trusted to serve unmodified frontend code.
+HTTPS-backed chat. The capability lets a requester submit arguments and receive
+output, nothing more: the bridge derives the displayed command from the arguments
+it executes, accepts only the `-u`, `-g`, `-H` and `-n` sudo options, and starts
+`/usr/bin/sudo -S -k` itself through a short-lived runner. The runner, not the
+requester, creates an RSA-3072 key pair in memory when sudo shows its password
+prompt; the phone uses RSA-OAEP/SHA-256 to encrypt the password, and the bridge
+relays only ciphertext. The private key and decrypted password stay in the runner,
+which writes one line to sudo's input and closes it. The prompt is recognized by a
+random marker passed in sudo's own environment. The API rejects plaintext password
+fields, requires authentication and JSON submissions, and does not log request
+bodies. Replies are one-use; cancellation, expiry, Stop and turn completion remove
+pending requests, and a rejected password is never retried. No password cache or
+sudoers bypass is added. Password buffers are cleared after use, although
+JavaScript cannot guarantee erasure of all memory copies.
+
+An earlier design let the requester name the displayed command and supply the
+encryption key, so any agent able to run the helper could show a harmless command
+and decrypt the password itself. That path is closed. What remains is not a
+separate OS security principal: the agent and the bridge share a Linux account. An
+agent with write access to the JARVIS checkout or state can replace the runner or
+the phone page, and with `kernel.yama.ptrace_scope` set to 0 it can read the
+runner's memory. Closing that requires running the bridge's privileged part under
+a different account or from root-owned files, which JARVIS does not do. A
+privileged command that has started may not accept the bridge's signal and may
+outlive Stop. HTTPS intermediaries remain trusted to serve unmodified frontend code.
+
+Claude Code is always started in its reviewed auto permission mode; the
+`agentFullAccess` setting does not select its bypass mode, and status reports
+"Reviewed auto mode" for it.
 
 Anyone holding a valid access link can issue requests to your coding agent. Full
 access is equivalent to trusting that requester with your Linux account. Agent
@@ -52,8 +70,13 @@ independently audit Whisper, Piper, Node.js, Cloudflare, Tailscale, agents, or m
 
 Personality instructions are intentionally sent to the selected coding agent and
 can be retained or repeated by that agent/provider. They are not a secret vault.
-The full prompt is available through authenticated personality settings; routine
-history responses include only names, onboarding stage and revision. Answers
+An agent can also rewrite them on disk, which is how remembered preferences work
+and equally how injected text could persist. Such edits are limited to 8000
+characters and are reported in the transcript after the turn that made them; they
+are not prevented.
+The visible personality is available through authenticated personality settings,
+while `hiddenInstructions` is never returned by the API; routine history responses
+include only names, onboarding stage and revision. Answers
 typed during onboarding remain part of the user's local transcript until cleared.
 Initial phone links and installed-app manifests still contain the bearer token by
 design; keep them private. See [the source privacy audit](docs/PRIVACY-AUDIT.md).

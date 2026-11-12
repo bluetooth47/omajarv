@@ -48,18 +48,30 @@ systemd bus; an unmocked test uninstall could stop the live JARVIS service.
 
 ## Encrypted phone sudo approval
 
-`server/lib/sudo.mjs` creates a per-turn capability and a private Unix socket;
-`server/sudo-run.mjs` and `server/sudo-askpass.mjs` implement the wrapper/askpass path.
+`server/lib/sudo.mjs` creates a per-turn capability and a private Unix socket.
+`server/sudo-command.mjs` is the agent-side wrapper: it sends arguments and relays
+output. `server/sudo-run.mjs` is started by the bridge to run `sudo -S -k` and is
+the only process that holds the private key and plaintext password.
 The agent is given a temporary wrapper path, not a password. Use the wrapper
 specified in the current request; never reuse a path from an earlier turn.
+
+The bridge decides what the phone shows and runs that same argument list itself.
+Do not let a requester supply display text, a prompt or a public key, do not move
+sudo back under the agent's process tree, and keep the sudo option allowlist
+(`-u`, `-g`, `-H`, `-n`) narrow: options that change the prompt, password source
+or environment would let a command forge or read the approval. The runner detects
+sudo's prompt through a random marker in sudo's environment, so do not pass the
+marker on the command line or let the command inherit it. Standard input is not
+forwarded; piped input is refused rather than dropped.
 
 Authenticated `/api/sudo/pending` and `/api/sudo/reply` require the HTTPS-backed
 bridge mode. The phone shows the requested command and working directory, encrypts
 the user's response using WebCrypto RSA-OAEP, and sends ciphertext. Decryption
-belongs only in the local askpass helper. Keep raw passwords out of chat, model
+belongs only in the runner. Keep raw passwords out of chat, model
 prompts, history, bridge logs and ordinary JSON APIs. Clear the phone input after
 submission, cancellation and expiry; a polling hiccup must not silently dismiss a
 pending request. Approval expires after 120 seconds and is single-use.
+Tests use `tests/fixtures/fake-sudo.mjs` through `sudoPath` or `JARVIS_TEST_SUDO`.
 
 Keep the command in the foreground and allow the approval window to finish. The
 server waits for pending approvals even if the agent finishes its textual reply.

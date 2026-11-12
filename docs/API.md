@@ -32,7 +32,8 @@ cloudflared process, so it changes on every server restart.
 
 `GET /api/sudo/pending` returns `{ "requests": [...] }` containing the current
 turn's request ID, command, working directory, sudo prompt, expiry timestamp and SPKI PEM RSA
-public key. `POST /api/sudo/reply` accepts `{ "id": "…", "ciphertext": "…" }`
+public key. The command text and key are produced by the bridge and its runner for
+the arguments that will be executed; a requester cannot set either. `POST /api/sudo/reply` accepts `{ "id": "…", "ciphertext": "…" }`
 or `{ "id": "…", "cancel": true }`. Encrypt UTF-8 password bytes with
 RSA-3072 OAEP using SHA-256 and send the 384-byte result as standard base64. Never
 send a plaintext password field. Replies are one-use; stale or invalid responses
@@ -55,7 +56,10 @@ through this endpoint.
 
 The personality state may also contain a private `hiddenInstructions` string. It
 is appended to the agent prompt but is never returned by these endpoints or shown
-in the personality editor; it is maintained outside the frontend.
+in the personality editor; it is maintained outside the frontend. When the
+personality or hidden instructions change on disk, the next completed turn adds a
+`system` message to the shared history naming what changed. Disk edits that are
+empty or longer than 8000 characters are ignored.
 
 `GET /api/history` includes names, stage and revision as `profile` (without the
 personality prompt), along with the shared

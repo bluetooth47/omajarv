@@ -35,6 +35,11 @@ are unavailable. Other agents remain disabled until their private transport is
 verified. You can override the Omarchy default with `"agent": "opencode"` (or
 `"hermes"`, `"codex"`, `"claude"`) in the JARVIS configuration.
 
+Claude Code always runs in its reviewed auto permission mode, because JARVIS has
+no interactive approval dialog; `agentFullAccess` does not change that or select
+Claude's bypass mode. A turn is stopped after `"agentTimeoutSec"` seconds (default
+240, allowed 30–3600); raise it in the JARVIS configuration for longer coding work.
+
 OpenCode retains its configured permission rules. Hermes permission requests are
 denied in normal mode because JARVIS has no interactive approval dialog. Explicit
 `"agentFullAccess": true` enables OpenCode auto-approval and lets JARVIS approve
@@ -259,20 +264,34 @@ When an agent uses JARVIS's sudo helper during a chat, the phone opens an
 directory. Review the command, then enter your computer password there and choose
 **Authorize once**, or cancel. Never type a password into the conversation.
 
-The phone encrypts the password for a short-lived local askpass helper. The bridge
-relays ciphertext; only that helper decrypts it and writes it to sudo's private
-password pipe. Passwords are not saved in settings, transcripts, agent input or
-normal logs. Requests expire after two minutes, and Stop closes pending requests.
-HTTPS is required; development HTTP mode disables this feature. No sudoers or
-system permission changes are installed, and the agent's existing tool permissions
-still apply. Already passwordless commands can run without a password dialog.
+The agent's helper only sends the requested arguments to the bridge. The bridge
+builds the text shown on the phone from those arguments and starts `sudo` itself,
+so the dialog shows what will actually run, and a request cannot supply its own
+description or encryption key. The phone encrypts the password for a short-lived
+local runner started by the bridge. The bridge relays ciphertext; only that runner
+decrypts it and writes it to sudo's password input. Passwords are not saved in
+settings, transcripts, agent input or normal logs. Requests expire after two
+minutes, and Stop closes pending requests. HTTPS is required; development HTTP
+mode disables this feature. No sudoers or system permission changes are installed,
+and the agent's existing tool permissions still apply. Already passwordless
+commands can run without a password dialog.
+
+The helper accepts `sudo [-u user] [-g group] [-H] [-n] command [arguments]`; other
+sudo options are refused. It does not forward standard input, and refuses piped
+input it can detect rather than dropping it: the agent must put data in a file. A passwordless
+command that waits for input will wait until the turn ends unless `-n` is given.
+The dialog appears when sudo shows its standard password prompt; PAM setups that
+ask for something else first (a fingerprint, a one-time code) delay or prevent it.
 
 This is a separate password transport, not isolation from a hostile local agent:
-a full-access agent runs as your Linux user and can inspect that user's processes
-or modify local helpers. Use this only with agents and privileged commands you
-trust. Agent tools must use the provided helper; commands that bypass it, or run
+an agent runs as your Linux user and, with enough access, can modify the installed
+JARVIS files, including the page your phone loads. It also assumes the kernel's
+default restriction on attaching to other processes (`kernel.yama.ptrace_scope`
+of 1 or higher). Use this only with agents and privileged commands you trust.
+Agent tools must use the provided helper; commands that bypass it, or run
 on another machine or in a container without access to the helper, cannot show
-this phone dialog. Privileged command output still returns to the coding agent.
+this phone dialog. Privileged command output still returns to the coding agent,
+and a privileged command that is already running may outlive Stop.
 
 ## Configuration and useful commands
 
@@ -310,6 +329,9 @@ jarvis logs            # follow service logs; review before sharing
 ```
 
 `jarvis token` deliberately prints your access credential. Keep its output private.
+The credential does not expire. If a link, QR or phone may have been exposed, run
+`jarvis rotate-token`: it issues a new credential and restarts the bridge, so every
+earlier link and installed phone app stops working until you scan a new QR.
 For endpoint details, see [the API reference](docs/API.md).
 
 ## Remove it
@@ -337,6 +359,7 @@ node tests/theme.mjs
 node tests/tailscale.mjs
 node tests/integration.mjs
 node tests/agents.mjs        # OpenCode/Hermes transport, sessions and Stop
+node tests/claude-adapter.mjs # Claude Code streaming, permission mode and turn timeout
 node tests/local-privacy.mjs
 node tests/personality.mjs
 node tests/attachments.mjs

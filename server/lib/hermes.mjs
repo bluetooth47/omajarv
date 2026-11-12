@@ -4,7 +4,7 @@ import readline from 'node:readline';
 import { paths } from './config.mjs';
 import { privateError } from './privacy.mjs';
 
-export function runHermes({config, prompt, sessionId, signal, onText, env = {}}) {
+export function runHermes({config, prompt, sessionId, signal, onText, env = {}, timeoutMs = 240000}) {
   if (signal?.aborted) return Promise.reject(privateError('Cancelled'));
   return new Promise((resolve, reject) => {
     const child = spawn('hermes', ['acp'], {
@@ -50,7 +50,7 @@ export function runHermes({config, prompt, sessionId, signal, onText, env = {}})
       cancelTimer = setTimeout(() => finish(privateError(`${reason}; Hermes cancellation was not confirmed`)), 5000);
     };
     const abort = () => cancel('Cancelled');
-    const timeout = setTimeout(() => cancel('Hermes timed out'), 240000);
+    const timeout = setTimeout(() => cancel('Hermes timed out'), timeoutMs);
     signal?.addEventListener('abort', abort, {once:true});
     child.on('error', finish);
     child.stdin.on('error', finish);

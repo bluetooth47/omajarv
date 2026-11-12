@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # omarchy:summary=Control the local JARVIS voice bridge
-# omarchy:args=[start|stop|restart|status|url|qr|open|toggle|phone|desktop|setup|setup-status|models|uninstall|logs|reset|cert|token|doctor|tailscale-enable|tailscale-status]
+# omarchy:args=[start|stop|restart|status|url|qr|open|toggle|phone|desktop|setup|setup-status|models|uninstall|logs|reset|cert|token|rotate-token|doctor|tailscale-enable|tailscale-status]
 # omarchy:examples=jarvis start | jarvis qr | jarvis open
 
 set -euo pipefail
@@ -237,6 +237,18 @@ cmd_token() {
   echo
 }
 
+# The access link is a bearer credential that never expires on its own. Rotating
+# it revokes every phone link, QR code and installed app made with the old one.
+cmd_rotate_token() {
+  rm -f "$STATE/token"
+  token >/dev/null
+  if running; then
+    cmd_stop >/dev/null
+    cmd_start
+  fi
+  echo "Access token rotated. Old phone links and installed apps no longer work; scan a new QR."
+}
+
 cmd_doctor() {
   local ok=true
   check() {
@@ -285,9 +297,10 @@ logs) shift || true; cmd_logs "${1:-60}" ;;
 reset) cmd_reset ;;
 cert) cmd_cert ;;
 token) cmd_token ;;
+rotate-token) cmd_rotate_token ;;
 doctor) cmd_doctor ;;
 *)
-  echo "Usage: jarvis <start|stop|restart|status|url|qr|open|toggle|phone|desktop|setup|setup-status|models|uninstall|logs|reset|cert|token|doctor|tailscale-enable|tailscale-status>"
+  echo "Usage: jarvis <start|stop|restart|status|url|qr|open|toggle|phone|desktop|setup|setup-status|models|uninstall|logs|reset|cert|token|rotate-token|doctor|tailscale-enable|tailscale-status>"
   exit 1
   ;;
 esac

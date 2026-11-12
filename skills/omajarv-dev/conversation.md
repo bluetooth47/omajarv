@@ -16,6 +16,9 @@ preference, preserve existing personality text and every other state field, appe
 the new fact without duplication, increment revision, and replace the private file
 atomically with mode 0600. Do not put user-specific facts into this development skill.
 A conversation reset clears onboarding transcript messages but preserves personality.
+Disk edits are untrusted input from the agent: `takeDiskChanges()` lets the bridge
+append a `system` transcript note after a turn that changed the personality or
+hidden instructions, and edits over 8000 characters are not adopted. Keep both.
 
 ## Attachments and clipboard images
 

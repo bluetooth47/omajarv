@@ -170,6 +170,12 @@ Open the QR code from the Omarchy bar, or run <b style="color:#6ff2ff">jarvis qr
 </body>`;
 }
 
+// Report the permission mode the adapter really uses, not just the setting.
+function accessLabel(id) {
+  if (id === "claude") return "Reviewed auto mode";
+  return (id === "codex" ? config.codexFullAccess : config.agentFullAccess) ? "Full access" : "Agent defaults";
+}
+
 async function statusPayload() {
   const tailscale = await tailscaleStatus(config);
   const agent = agentStatus(config);
@@ -186,7 +192,7 @@ async function statusPayload() {
     tunnel,
     tailscale,
     tailscaleUrl: tailscale.url ? `${tailscale.url}/?k=${encodeURIComponent(token)}` : "",
-    agent: { ...agent, access: (agent.id === "codex" ? config.codexFullAccess : config.agentFullAccess) ? "Full access" : "Agent defaults", model: (config.agentModels && config.agentModels[agent.id]) || "", modelSelectable: modelSelectable(agent.id) },
+    agent: { ...agent, access: accessLabel(agent.id), model: (config.agentModels && config.agentModels[agent.id]) || "", modelSelectable: modelSelectable(agent.id) },
     chatBusy,
     stt: sttStatus(config),
     tts: ttsStatus(config),
@@ -387,7 +393,8 @@ async function handleApi(req, res, pathname, params) {
     send("meta", { agent: agent.id, label: agent.label, session: rememberedSession(agent.id) });
 
     try {
-      if (!useHttp) sudoSession = await createSudoSession({signal:abort.signal});
+      // JARVIS_TEST_SUDO substitutes a fixture for /usr/bin/sudo in the test suite only.
+      if (!useHttp) sudoSession = await createSudoSession({signal:abort.signal, sudoPath:process.env.JARVIS_TEST_SUDO || undefined});
       const result = await runAgent({
         config: {...config, systemPrompt:personality.prompt() + (sudoSession ? '\n\n' + sudoSession.instruction : '')},
         env: sudoSession?.env,
@@ -412,6 +419,11 @@ async function handleApi(req, res, pathname, params) {
       appendHistory(agent.id, "system", message);
       send("error", { error: message });
     } finally {
+      // An agent can rewrite its own standing instructions; never apply that silently.
+      try {
+        const changed = personality.takeDiskChanges();
+        if (changed.length) appendHistory(agent.id, "system", `Saved ${changed.join(" and ")} changed outside the Personality editor. Review before continuing.`);
+      } catch { log("personality change check failed"); }
       for (const file of files) file.active = false;
       sudoSession?.close();
       sudoSession = null;

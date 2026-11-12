@@ -19,8 +19,9 @@ start URL. Treat the browser profile, access link, QR, and screenshots as creden
 ## What can leave the machine
 
 The phone's Administrator permission dialog encrypts its password for a temporary
-local sudo askpass helper. The bridge relays ciphertext without decrypting it;
-the helper delivers the plaintext only to sudo's password pipe. JARVIS does not
+local sudo runner that the bridge starts for that one command. The bridge relays
+ciphertext without decrypting it; the runner delivers the plaintext only to sudo's
+password input. JARVIS does not
 include passwords in agent prompts, conversations, normal logs or persistent
 storage. This does not prevent an unrestricted agent running under the same Linux
 account from inspecting or modifying the local authorization machinery. Command

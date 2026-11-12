@@ -30,10 +30,12 @@ an independent penetration test or an audit of dependencies and providers.
   agent/provider. Whisper/Piper processing stays local. No telemetry collector was
   found in JARVIS source. Optional network transports and model/package downloads
   remain documented external contacts.
-- The sudo bridge relays ciphertext. Plaintext is decrypted only in the askpass
-  helper and sent to sudo's pipe. Tests use fixture passwords and fake sudo, never
-  a real privileged command. Full-access same-user agents can inspect or modify
-  local helpers; the design is not OS-level isolation from a hostile local agent.
+- The sudo bridge relays ciphertext. Plaintext is decrypted only in the runner the
+  bridge starts for that command and sent to sudo's input. The requesting agent
+  supplies arguments only; it cannot set the displayed command or the key. Tests
+  use fixture passwords and fake sudo, never a real privileged command. Same-user
+  agents with write access can still modify local files; the design is not
+  OS-level isolation from a hostile local agent.
 - Initial QR/access links, session storage and installed-app manifests contain the
   bearer credential intentionally. Header authentication reduces recurring API URL
   exposure; it does not remove credentials from initial links or browser profiles.

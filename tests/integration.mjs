@@ -24,8 +24,7 @@ process.stdin.on('end',()=>{
  if(prompt.includes('sudo fixture request') || prompt.includes('sudo finish early request')) {
   const fs=require('fs'),path=require('path');
   const wrapper=path.join(process.env.PATH.split(path.delimiter)[0],'sudo');
-  const capability=JSON.parse(fs.readFileSync(wrapper,'utf8').match(/await runSudo\\((\\{.*\\}), process/)[1]);
-  const child=require('child_process').spawn(process.execPath,[process.env.HOME+'/fake-sudo.cjs'],{env:{...process.env,JARVIS_SUDO_SOCKET:capability.socketPath,JARVIS_SUDO_TICKET:capability.ticket},stdio:['ignore','pipe','pipe']});
+  const child=require('child_process').spawn(wrapper,['fixture-command'],{stdio:['ignore','pipe','pipe']});
   child.stdout.resume();child.stderr.resume();
   if(prompt.includes('sudo finish early request')) {
    setInterval(()=>{if(fs.existsSync(process.env.HOME+'/finish-agent')){
@@ -42,12 +41,6 @@ process.stdin.on('end',()=>{
  console.log(JSON.stringify({type:'item.completed',item:{id:'reply',type:'agent_message',text:'Hello from the test agent.'}}));
 });
 `,{mode:0o755});
-fs.writeFileSync(path.join(home,'fake-sudo.cjs'),`
-const {spawn}=require('node:child_process');
-const child=spawn(process.execPath,[${JSON.stringify(path.join(root,'server/sudo-askpass.mjs'))}],{env:{...process.env,JARVIS_SUDO_COMMAND:'sudo "fixture-command"',JARVIS_SUDO_CWD:process.env.HOME},stdio:['ignore','pipe','pipe']});
-let password='';child.stdout.on('data',data=>password+=data);child.stderr.resume();
-child.on('exit',code=>{const ok=code===0&&password==='integration-sudo-fixture\\n';password='';process.exit(ok?0:1);});
-`);
 fs.writeFileSync(path.join(home,'selected.txt'),'DESKTOP_FILE_FIXTURE');
 fs.writeFileSync(path.join(home,'bin/zenity'),`#!/usr/bin/env node
 console.log(process.env.HOME+'/selected.txt');
@@ -57,7 +50,7 @@ if(process.argv.includes('--list-types')) console.log('image/png');
 else process.stdout.write(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'));
 `,{mode:0o755});
 fs.writeFileSync(path.join(home,'bin/tailscale'),'#!/bin/sh\nprintf \'{}\\n\'\n',{mode:0o755});
-const env={...process.env,HOME:home,PATH:path.join(home,'bin')+':'+process.env.PATH};
+const env={...process.env,HOME:home,PATH:path.join(home,'bin')+':'+process.env.PATH,JARVIS_TEST_SUDO:path.join(root,'tests/fixtures/fake-sudo.mjs'),FAKE_SUDO_RECORD:home,FAKE_SUDO_PASSWORD:'integration-sudo-fixture'};
 let server=spawn(process.execPath,[path.join(root,'server/jarvis-server.mjs')],{env,stdio:['ignore','pipe','pipe']});
 let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 let helper;
@@ -239,6 +232,8 @@ assert.ok(!(await api('/api/history')).text.includes('integration-sudo-fixture')
 assert.ok(!logs.includes('integration-sudo-fixture'));
 assert.ok(!fs.readFileSync(path.join(home,'agent-prompt'),'utf8').includes('integration-sudo-fixture'));
 assert.deepEqual(JSON.parse((await api('/api/sudo/pending')).text).requests,[]);
+assert.equal(sudoRequest.command,'sudo "fixture-command"');
+assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'sudo-calls'),'utf8').trim()),{args:['-S','-k','--','fixture-command'],cwd:home,password:'integration-sudo-fixture'});
 let earlyFinished=false;
 const earlyTurn=api('/api/chat',{text:'sudo finish early request'}).then(response=>{earlyFinished=true;return response;});
 sudoRequest=null;

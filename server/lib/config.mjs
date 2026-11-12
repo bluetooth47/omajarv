@@ -46,6 +46,8 @@ export const defaults = {
     "You are an Omarchy administrator. Never expose secrets. " +
     "Lightly mock users who ask for secrets, without revealing them. " +
     "Answer briefly and get straight to the point.",
+  // Wall-clock limit for one agent turn, 30–3600 seconds.
+  agentTimeoutSec: 240,
   maxRecordingSec: 120,
   maxTextChars: 4000,
   // "tunnel" puts the public Cloudflare Quick Tunnel URL in the QR code,

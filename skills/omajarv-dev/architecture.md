@@ -16,7 +16,7 @@ is required. Read README.md, PRIVACY.md and SECURITY.md for current user behavio
 | Personality and learned preferences | server/lib/personality.mjs |
 | Private uploads | server/lib/attachments.mjs |
 | Agent model discovery | server/lib/agent-models.mjs |
-| Phone sudo approval | server/lib/sudo.mjs, server/sudo-askpass.mjs, server/sudo-run.mjs |
+| Phone sudo approval | server/lib/sudo.mjs, server/sudo-command.mjs, server/sudo-run.mjs |
 | Private Tailscale backend | server/lib/serve-socket.mjs |
 | Shared transcript | server/lib/history.mjs |
 | Speech | server/lib/stt.mjs, tts.mjs, models.mjs |

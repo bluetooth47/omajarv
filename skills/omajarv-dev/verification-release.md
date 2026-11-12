@@ -9,6 +9,7 @@ a documentation or color-only edit does not automatically require the full suite
 | Model discovery/download setup | node tests/onboarding.mjs |
 | Installer/removal/defaults | node tests/install.mjs; node tests/marketplace-install.mjs |
 | Agent/API/auth/history/stop/QR | node tests/integration.mjs |
+| Agent adapters, streaming, turn timeout | node tests/agents.mjs; node tests/claude-adapter.mjs |
 | Personality/live memory | node tests/personality.mjs; node tests/integration.mjs |
 | Upload limits, storage and clipboard delivery | node tests/attachments.mjs; node tests/integration.mjs |
 | Agent model picker | node tests/agent-models.mjs; node tests/desktop-models.mjs |

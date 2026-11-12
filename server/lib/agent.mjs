@@ -49,6 +49,13 @@ export function agentStatus(config) {
   return { id, label: agentLabel(id), ready: ["codex", "claude", "opencode", "hermes"].includes(id) && binPresent(id) };
 }
 
+// One turn's wall-clock limit. Coding work can outlast the default, so it is
+// configurable; out-of-range values fall back rather than disabling the limit.
+export function agentTimeoutMs(config) {
+  const seconds = Number(config?.agentTimeoutSec);
+  return (Number.isFinite(seconds) && seconds >= 30 && seconds <= 3600 ? seconds : 240) * 1000;
+}
+
 function buildPrompt(text, config) {
   const prompt = String(text || "").trim();
   return `${config.systemPrompt}\n\nSpoken user request: ${prompt}`;
@@ -56,6 +63,8 @@ function buildPrompt(text, config) {
 
 // Each supported adapter passes the prompt on stdin and returns a
 // parser that maps one agent JSON event onto zero or more text deltas.
+// `emit` takes cumulative text (repeated in full on each event); `append`
+// takes incremental text that must be forwarded exactly as received.
 function adapter(id, { prompt, session, config, images = [] }) {
   const cwd = config.workDir || paths.root;
 
@@ -103,22 +112,33 @@ function adapter(id, { prompt, session, config, images = [] }) {
     }
 
     case "claude": {
+      // Auto mode reviews each tool call; JARVIS has no interactive approval dialog.
+      // agentFullAccess deliberately does not map onto Claude's bypass mode.
       const args = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", "auto"];
       if (session) args.push("--resume", session);
+      // Partial messages arrive as incremental deltas, followed by the complete
+      // assistant message. Forward deltas as-is and use the complete message
+      // only for text that was not already streamed.
+      let streamed = "";
       return {
         cmd: "claude",
         args,
         cwd,
         stdin: prompt,
-        parse: (event, emit, setSession) => {
+        parse: (event, emit, setSession, append) => {
           if (event.session_id) setSession(event.session_id);
+          // Subagent traffic is tool output, not the reply.
+          if (event.parent_tool_use_id) return;
           if (event.type === "stream_event") {
             const delta = event.event?.delta;
-            if (event.event?.type === "content_block_delta" && delta?.type === "text_delta") emit(delta.text);
-          } else if (event.type === "assistant" && Array.isArray(event.message?.content)) {
-            for (const block of event.message.content) {
-              if (block.type === "text" && block.text) emit(block.text);
+            if (event.event?.type === "content_block_delta" && delta?.type === "text_delta" && typeof delta.text === "string") {
+              streamed += delta.text;
+              append(delta.text);
             }
+          } else if (event.type === "assistant" && Array.isArray(event.message?.content)) {
+            const full = event.message.content.filter((block) => block.type === "text" && typeof block.text === "string").map((block) => block.text).join("");
+            if (full && !streamed.endsWith(full)) append(full.startsWith(streamed) ? full.slice(streamed.length) : full);
+            streamed = "";
           }
         },
       };
@@ -134,7 +154,7 @@ function adapter(id, { prompt, session, config, images = [] }) {
 export function runAgent({ config, text, sessionId, signal, onText, env = {}, images = [] }) {
   const id = resolveAgent(config);
   const prompt = buildPrompt(text, config);
-  if (id === "hermes") return runHermes({config, prompt, sessionId, signal, onText, env});
+  if (id === "hermes") return runHermes({config, prompt, sessionId, signal, onText, env, timeoutMs: agentTimeoutMs(config)});
   const spec = adapter(id, { prompt, session: sessionId, config, images });
 
   return new Promise((resolve, reject) => {
@@ -154,7 +174,7 @@ export function runAgent({ config, text, sessionId, signal, onText, env = {}, im
 
     const timer = setTimeout(() => {
       fail(privateError(`${agentLabel(id)} timed out`));
-    }, 240000);
+    }, agentTimeoutMs(config));
 
     function emit(chunk) {
       if (!chunk) return;
@@ -217,7 +237,7 @@ export function runAgent({ config, text, sessionId, signal, onText, env = {}, im
           session = event.session_id || event.thread_id || event.sessionID || session;
         }, (value) => {
           if (value) session = value;
-        });
+        }, emit);
       } catch (error) {
         fail(error);
       }
